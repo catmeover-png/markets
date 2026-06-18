@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WC Markets — кросс-платформенные объёмы</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --panel: #f7faf8;
+    --border: #d7e6dd;
+    --green: #16a34a;
+    --green-dark: #15803d;
+    --green-soft: #e7f6ee;
+    --ink: #14532d;
+    --muted: #6b8a78;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--green-dark);
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    line-height: 1.4;
+  }
+  header {
+    padding: 28px 20px 18px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  h1 { margin: 0 0 4px; font-size: 20px; color: var(--green-dark); letter-spacing: -0.3px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; align-items: center;
+  }
+  input[type="search"] {
+    flex: 1 1 220px; min-width: 180px;
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font: inherit; color: var(--green-dark); background: var(--panel);
+  }
+  input[type="search"]:focus { outline: 2px solid var(--green-soft); border-color: var(--green); }
+  .toggle, select {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel); color: var(--green-dark); font: inherit; cursor: pointer;
+  }
+  .toggle.active { background: var(--green); color: #fff; border-color: var(--green); }
+  main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+  .status { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+  .card {
+    border: 1px solid var(--border); border-radius: 12px; background: var(--panel);
+    padding: 14px 14px 8px; display: flex; flex-direction: column;
+  }
+  .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .teams { font-size: 16px; font-weight: 700; color: var(--green-dark); }
+  .badge {
+    font-size: 11px; padding: 3px 7px; border-radius: 6px;
+    background: var(--green-soft); color: var(--green-dark); white-space: nowrap;
+  }
+  .meta { font-size: 12px; color: var(--muted); margin: 4px 0 10px; }
+  .sel { color: var(--green); font-weight: 700; }
+  .rows { display: flex; flex-direction: column; gap: 6px; }
+  .row {
+    display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 8px;
+    padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  }
+  .plat { font-size: 12px; font-weight: 700; color: var(--green-dark); }
+  .vol { font-size: 14px; text-align: right; color: var(--green-dark); }
+  .vol small { color: var(--muted); font-weight: 400; }
+  .go {
+    text-decoration: none; font-size: 12px; padding: 5px 10px; border-radius: 7px;
+    border: 1px solid var(--green); color: var(--green); white-space: nowrap;
+  }
+  .go:hover { background: var(--green); color: #fff; }
+  .totals {
+    margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border);
+    font-size: 12px; color: var(--muted); display: flex; justify-content: space-between;
+  }
+  .totals b { color: var(--green-dark); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
+  a.repo { color: var(--green); }
+  .err { color: #b91c1c; }
+</style>
+</head>
+<body>
+<header>
+  <h1>WC Markets — одинаковые маркеты на разных платформах</h1>
+  <div class="sub">Polymarket · Limitless · ADI · Kalshi — объёмы и ссылки по каждому маркету</div>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Поиск по команде (например: Brazil)" />
+    <select id="sort">
+      <option value="usd_volume_total">Сорт.: объём USD (всего)</option>
+      <option value="usd_volume_24h">Сорт.: объём USD (24ч)</option>
+      <option value="platform_count">Сорт.: число платформ</option>
+    </select>
+    <button id="multiToggle" class="toggle active">Только 2+ платформ</button>
+    <button id="refresh" class="toggle">Обновить</button>
+  </div>
+</header>
+
+<main>
+  <div id="status" class="status">Загрузка…</div>
+  <div id="grid" class="grid"></div>
+</main>
+
+<footer>
+  Данные из Supabase · обновляются парсером <a class="repo" href="#">wc-parser</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ============================================================
+// === НАСТРОЙКА: впиши свои значения ==========================
+// ============================================================
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-ANON-KEY"; // anon/public ключ, не service_role
+const TABLE = "market_groups";
+// ============================================================
+
+const PLATFORM_LABEL = {
+  polymarket: "Polymarket",
+  limitless: "Limitless",
+  adi: "ADI",
+  kalshi: "Kalshi",
+};
+const TYPE_LABEL = {
+  match_winner: "Победитель",
+  correct_score: "Точный счёт",
+  total_goals: "Тотал голов",
+  btts: "Обе забьют",
+};
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const el = {
+  grid: document.getElementById("grid"),
+  status: document.getElementById("status"),
+  search: document.getElementById("search"),
+  sort: document.getElementById("sort"),
+  multi: document.getElementById("multiToggle"),
+  refresh: document.getElementById("refresh"),
+};
+
+let ALL = [];
+let multiOnly = true;
+
+function fmtVol(n) {
+  if (n === null || n === undefined) return "—";
+  const v = Number(n);
+  if (!isFinite(v)) return "—";
+  if (v >= 1e9) return (v / 1e9).toFixed(2).replace(/\.0+$/, "") + "B";
+  if (v >= 1e6) return (v / 1e6).toFixed(2).replace(/\.0+$/, "") + "M";
+  if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+  return v.toFixed(0);
+}
+
+function platformRow(plat, volumes, urls) {
+  const v = (volumes && volumes[plat]) || {};
+  const url = (urls && urls[plat]) || null;
+  const cur = v.currency ? `<small> ${escapeHtml(v.currency)}</small>` : "";
+  const link = url
+    ? `<a class="go" href="${escapeAttr(url)}" target="_blank" rel="noopener">маркет ↗</a>`
+    : `<span class="go" style="opacity:.4;border-style:dashed;cursor:default">нет</span>`;
+  return `
+    <div class="row">
+      <span class="plat">${escapeHtml(PLATFORM_LABEL[plat] || plat)}</span>
+      <span class="vol">${fmtVol(v.total)}${cur}</span>
+      ${link}
+    </div>`;
+}
+
+function card(g) {
+  const teams = `${escapeHtml(g.team_a || "?")} — ${escapeHtml(g.team_b || "?")}`;
+  const type = TYPE_LABEL[g.market_type] || g.market_type || "—";
+  const sel = g.selection && !["na", "winner", "cs", "ou"].includes(g.selection)
+    ? `<span class="sel">${escapeHtml(g.selection)}</span>` : "";
+  const platforms = Array.isArray(g.platforms) ? g.platforms : [];
+  const rows = platforms.map(p => platformRow(p, g.volumes, g.urls)).join("");
+  const title = g.sample_title ? escapeHtml(g.sample_title) : "";
+  return `
+    <div class="card">
+      <div class="card-top">
+        <span class="teams">${teams}</span>
+        <span class="badge">${escapeHtml(type)}</span>
+      </div>
+      <div class="meta">${sel}${sel && title ? " · " : ""}${title}</div>
+      <div class="rows">${rows}</div>
+      <div class="totals">
+        <span>USD всего: <b>${fmtVol(g.usd_volume_total)}</b></span>
+        <span>24ч: <b>${fmtVol(g.usd_volume_24h)}</b></span>
+        <span>платформ: <b>${g.platform_count ?? platforms.length}</b></span>
+      </div>
+    </div>`;
+}
+
+function render() {
+  const q = el.search.value.trim().toLowerCase();
+  const sortKey = el.sort.value;
+  let rows = ALL.slice();
+
+  if (multiOnly) rows = rows.filter(g => (g.platform_count ?? 0) >= 2);
+  if (q) {
+    rows = rows.filter(g =>
+      (g.team_a || "").toLowerCase().includes(q) ||
+      (g.team_b || "").toLowerCase().includes(q) ||
+      (g.sample_title || "").toLowerCase().includes(q));
+  }
+  rows.sort((a, b) => (Number(b[sortKey]) || 0) - (Number(a[sortKey]) || 0));
+
+  el.grid.innerHTML = rows.map(card).join("");
+  el.status.textContent = rows.length
+    ? `Показано маркетов: ${rows.length}`
+    : "Ничего не найдено по текущим фильтрам.";
+}
+
+async function load() {
+  el.status.textContent = "Загрузка…";
+  el.status.classList.remove("err");
+  try {
+    const { data, error } = await sb
+      .from(TABLE)
+      .select("*")
+      .eq("is_active", true)
+      .order("usd_volume_total", { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    ALL = data || [];
+    render();
+  } catch (e) {
+    el.status.textContent = "Ошибка загрузки: " + (e.message || e);
+    el.status.classList.add("err");
+    el.grid.innerHTML = "";
+    console.error(e);
+  }
+}
+
+// helpers
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, m =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+// events
+el.search.addEventListener("input", render);
+el.sort.addEventListener("change", render);
+el.refresh.addEventListener("click", load);
+el.multi.addEventListener("click", () => {
+  multiOnly = !multiOnly;
+  el.multi.classList.toggle("active", multiOnly);
+  render();
+});
+
+load();
+</script>
+</body>
+</html>
