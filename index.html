@@ -443,6 +443,7 @@ function getVolume24h(v) {
   if (!v) return null;
 
   return (
+    v.h24 ??
     v.volume_24h ??
     v.volume24h ??
     v.vol_24h ??
