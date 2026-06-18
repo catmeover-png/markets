@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>World Cup Markets — Dashboard</title>
 
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&display=swap" rel="stylesheet">
+
 <style>
 :root {
   --bg: #070b14;
@@ -20,9 +22,7 @@
   --red: #ff6b8a;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -89,7 +89,10 @@ select,
   color: var(--text);
   border-radius: 12px;
   padding: 11px 13px;
-  font: inherit;
+  font-family: Oxanium, Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .045em;
 }
 
 input[type="search"] {
@@ -229,16 +232,28 @@ main {
 }
 
 .plat {
+  font-family: Oxanium, Inter, sans-serif;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .45px;
+  letter-spacing: .06em;
 }
 
 .vol {
-  font-size: 15px;
   text-align: right;
-  font-weight: 800;
+  line-height: 1.18;
+}
+
+.vol-main {
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.vol-day {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .vol small {
@@ -293,31 +308,20 @@ footer {
   padding: 26px;
 }
 
-a.repo {
-  color: var(--cyan);
-}
-
-.err {
-  color: var(--red);
-}
+a.repo { color: var(--cyan); }
+.err { color: var(--red); }
 
 @media (max-width: 640px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
+  .grid { grid-template-columns: 1fr; }
 
   .row {
     grid-template-columns: 1fr;
     align-items: start;
   }
 
-  .vol {
-    text-align: left;
-  }
+  .vol { text-align: left; }
 
-  .totals {
-    grid-template-columns: 1fr;
-  }
+  .totals { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -373,17 +377,11 @@ a.repo {
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ============================================================
-// === НАСТРОЙКА ===============================================
-// ============================================================
 const SUPABASE_URL = "https://emspjcucgfewlgrhgwnz.supabase.co";
 
-// Вставь сюда свой anon/public key.
-// Не вставляй service_role key в фронтенд.
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtc3BqY3VjZ2Zld2xncmhnd256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDU0OTQsImV4cCI6MjA5NzI4MTQ5NH0.BMQVWZvpesUbVIP4CYQvlptWulC3NTJfioNbU4fBjWI";
 
 const TABLE = "market_groups";
-// ============================================================
 
 const PLATFORM_LABEL = {
   polymarket: "Polymarket",
@@ -427,10 +425,56 @@ function fmtVol(n) {
   return v.toFixed(0);
 }
 
+function getVolumeTotal(v) {
+  if (!v) return null;
+
+  return (
+    v.total ??
+    v.volume_total ??
+    v.total_volume ??
+    v.volume ??
+    v.usd_volume_total ??
+    v.usd_total ??
+    null
+  );
+}
+
+function getVolume24h(v) {
+  if (!v) return null;
+
+  return (
+    v.volume_24h ??
+    v.volume24h ??
+    v.vol_24h ??
+    v.day ??
+    v.day_volume ??
+    v.usd_volume_24h ??
+    v.usd_24h ??
+    v.total_24h ??
+    null
+  );
+}
+
+function getCurrency(v) {
+  if (!v) return "";
+
+  return (
+    v.currency ??
+    v.unit ??
+    v.token ??
+    ""
+  );
+}
+
 function platformRow(plat, volumes, urls) {
   const v = (volumes && volumes[plat]) || {};
   const url = (urls && urls[plat]) || null;
-  const cur = v.currency ? `<small> ${escapeHtml(v.currency)}</small>` : "";
+
+  const total = getVolumeTotal(v);
+  const day = getVolume24h(v);
+  const currency = getCurrency(v);
+
+  const cur = currency ? `<small> ${escapeHtml(currency)}</small>` : "";
 
   const link = url
     ? `<a class="go" href="${escapeAttr(url)}" target="_blank" rel="noopener">open ↗</a>`
@@ -439,7 +483,12 @@ function platformRow(plat, volumes, urls) {
   return `
     <div class="row" data-platform="${escapeAttr(plat)}">
       <span class="plat">${escapeHtml(PLATFORM_LABEL[plat] || plat)}</span>
-      <span class="vol">${fmtVol(v.total)}${cur}</span>
+
+      <span class="vol">
+        <div class="vol-main">${fmtVol(total)}${cur}</div>
+        <div class="vol-day">24ч: ${fmtVol(day)}${cur}</div>
+      </span>
+
       ${link}
     </div>`;
 }
