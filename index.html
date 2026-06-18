@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>WC Markets — Crypto Dashboard</title>
+
 <style>
 :root {
   --bg: #070b14;
@@ -19,7 +20,9 @@
   --red: #ff6b8a;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -78,7 +81,9 @@ h1 {
   margin-top: 18px;
 }
 
-input[type="search"], select, .toggle {
+input[type="search"],
+select,
+.toggle {
   border: 1px solid var(--border);
   background: rgba(12, 20, 36, .95);
   color: var(--text);
@@ -88,11 +93,12 @@ input[type="search"], select, .toggle {
 }
 
 input[type="search"] {
-  flex: 1 1 260px;
-  min-width: 190px;
+  flex: 1 1 280px;
+  min-width: 210px;
 }
 
-input[type="search"]:focus, select:focus {
+input[type="search"]:focus,
+select:focus {
   outline: none;
   border-color: var(--cyan);
   box-shadow: 0 0 0 3px rgba(54,244,255,.12);
@@ -102,11 +108,9 @@ input[type="search"]:focus, select:focus {
   cursor: pointer;
 }
 
-.toggle.active {
-  color: #061018;
-  background: linear-gradient(135deg, var(--cyan), var(--green));
-  border-color: transparent;
-  font-weight: 800;
+.toggle:hover {
+  border-color: var(--cyan);
+  background: rgba(54,244,255,.1);
 }
 
 main {
@@ -208,14 +212,17 @@ main {
   border-color: rgba(54,244,255,.32);
   background: linear-gradient(90deg, rgba(54,244,255,.13), rgba(20,31,52,.9));
 }
+
 .row[data-platform="limitless"] {
   border-color: rgba(56,247,155,.32);
   background: linear-gradient(90deg, rgba(56,247,155,.13), rgba(20,31,52,.9));
 }
+
 .row[data-platform="adi"] {
   border-color: rgba(167,139,250,.34);
   background: linear-gradient(90deg, rgba(167,139,250,.15), rgba(20,31,52,.9));
 }
+
 .row[data-platform="kalshi"] {
   border-color: rgba(255,184,107,.34);
   background: linear-gradient(90deg, rgba(255,184,107,.15), rgba(20,31,52,.9));
@@ -293,6 +300,25 @@ a.repo {
 .err {
   color: var(--red);
 }
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .vol {
+    text-align: left;
+  }
+
+  .totals {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 </head>
 
@@ -303,13 +329,34 @@ a.repo {
     <div class="sub">Polymarket · Limitless · ADI · Kalshi — объёмы, совпадения и ссылки по маркетам</div>
 
     <div class="controls">
-      <input id="search" type="search" placeholder="Поиск по команде, матчу или маркету" />
-      <select id="sort">
-        <option value="usd_volume_total">Сорт.: объём USD всего</option>
-        <option value="usd_volume_24h">Сорт.: объём USD 24ч</option>
-        <option value="platform_count">Сорт.: число платформ</option>
+      <input id="search" type="search" placeholder="Поиск: команда, маркет или платформа — например Limitless" />
+
+      <select id="platformFilter">
+        <option value="all">Все платформы</option>
+        <option value="polymarket">Polymarket</option>
+        <option value="limitless">Limitless</option>
+        <option value="adi">ADI</option>
+        <option value="kalshi">Kalshi</option>
       </select>
-      <button id="multiToggle" class="toggle active">2+ платформ</button>
+
+      <select id="marketFilter">
+        <option value="all">Все маркеты</option>
+        <option value="single">Single</option>
+        <option value="2plus">2+ платформ</option>
+        <option value="3plus">3+ платформ</option>
+      </select>
+
+      <select id="sort">
+        <option value="usd_volume_total">Объём USD всего</option>
+        <option value="usd_volume_24h">Объём USD 24ч</option>
+        <option value="platform_count">Число платформ</option>
+      </select>
+
+      <select id="sortDir">
+        <option value="desc">По убыванию</option>
+        <option value="asc">По возрастанию</option>
+      </select>
+
       <button id="refresh" class="toggle">Обновить</button>
     </div>
   </div>
@@ -326,9 +373,17 @@ a.repo {
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+// ============================================================
+// === НАСТРОЙКА ===============================================
+// ============================================================
 const SUPABASE_URL = "https://emspjcucgfewlgrhgwnz.supabase.co";
+
+// Вставь сюда свой anon/public key.
+// Не вставляй service_role key в фронтенд.
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtc3BqY3VjZ2Zld2xncmhnd256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDU0OTQsImV4cCI6MjA5NzI4MTQ5NH0.BMQVWZvpesUbVIP4CYQvlptWulC3NTJfioNbU4fBjWI";
+
 const TABLE = "market_groups";
+// ============================================================
 
 const PLATFORM_LABEL = {
   polymarket: "Polymarket",
@@ -351,20 +406,24 @@ const el = {
   status: document.getElementById("status"),
   search: document.getElementById("search"),
   sort: document.getElementById("sort"),
-  multi: document.getElementById("multiToggle"),
+  sortDir: document.getElementById("sortDir"),
+  platformFilter: document.getElementById("platformFilter"),
+  marketFilter: document.getElementById("marketFilter"),
   refresh: document.getElementById("refresh"),
 };
 
 let ALL = [];
-let multiOnly = true;
 
 function fmtVol(n) {
   if (n === null || n === undefined) return "—";
+
   const v = Number(n);
+
   if (!isFinite(v)) return "—";
   if (v >= 1e9) return (v / 1e9).toFixed(2).replace(/\.0+$/, "") + "B";
   if (v >= 1e6) return (v / 1e6).toFixed(2).replace(/\.0+$/, "") + "M";
   if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+
   return v.toFixed(0);
 }
 
@@ -419,19 +478,53 @@ function card(g) {
 function render() {
   const q = el.search.value.trim().toLowerCase();
   const sortKey = el.sort.value;
+  const sortDir = el.sortDir.value;
+  const platformFilter = el.platformFilter.value;
+  const marketFilter = el.marketFilter.value;
+
   let rows = ALL.slice();
 
-  if (multiOnly) rows = rows.filter(g => (g.platform_count ?? 0) >= 2);
-
-  if (q) {
+  if (platformFilter !== "all") {
     rows = rows.filter(g =>
-      (g.team_a || "").toLowerCase().includes(q) ||
-      (g.team_b || "").toLowerCase().includes(q) ||
-      (g.sample_title || "").toLowerCase().includes(q)
+      Array.isArray(g.platforms) && g.platforms.includes(platformFilter)
     );
   }
 
-  rows.sort((a, b) => (Number(b[sortKey]) || 0) - (Number(a[sortKey]) || 0));
+  if (marketFilter === "single") {
+    rows = rows.filter(g => (g.platform_count ?? 0) === 1);
+  }
+
+  if (marketFilter === "2plus") {
+    rows = rows.filter(g => (g.platform_count ?? 0) >= 2);
+  }
+
+  if (marketFilter === "3plus") {
+    rows = rows.filter(g => (g.platform_count ?? 0) >= 3);
+  }
+
+  if (q) {
+    rows = rows.filter(g => {
+      const platforms = Array.isArray(g.platforms) ? g.platforms : [];
+
+      return (
+        (g.team_a || "").toLowerCase().includes(q) ||
+        (g.team_b || "").toLowerCase().includes(q) ||
+        (g.sample_title || "").toLowerCase().includes(q) ||
+        (g.market_type || "").toLowerCase().includes(q) ||
+        platforms.some(p =>
+          p.toLowerCase().includes(q) ||
+          (PLATFORM_LABEL[p] || "").toLowerCase().includes(q)
+        )
+      );
+    });
+  }
+
+  rows.sort((a, b) => {
+    const av = Number(a[sortKey]) || 0;
+    const bv = Number(b[sortKey]) || 0;
+
+    return sortDir === "asc" ? av - bv : bv - av;
+  });
 
   el.grid.innerHTML = rows.map(card).join("");
 
@@ -476,13 +569,10 @@ function escapeAttr(s) {
 
 el.search.addEventListener("input", render);
 el.sort.addEventListener("change", render);
+el.sortDir.addEventListener("change", render);
+el.platformFilter.addEventListener("change", render);
+el.marketFilter.addEventListener("change", render);
 el.refresh.addEventListener("click", load);
-
-el.multi.addEventListener("click", () => {
-  multiOnly = !multiOnly;
-  el.multi.classList.toggle("active", multiOnly);
-  render();
-});
 
 load();
 </script>
